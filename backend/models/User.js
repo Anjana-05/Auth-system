@@ -10,9 +10,8 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    // required: true, // REMOVED to allow Phone Auth users
     unique: true,
-    sparse: true, // Allows multiple null values
+    sparse: true, 
     trim: true,
     lowercase: true,
     match: [/\S+@\S+\.\S+/, 'Please use a valid email address']
@@ -23,7 +22,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     minlength: 6
   },
-  googleId: { type: String, unique: true, sparse: true },
   name: String,
   picture: String,
   resetPasswordToken: String,

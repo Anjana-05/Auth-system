@@ -1,6 +1,5 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import passport from 'passport';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import User from '../models/User.js';
@@ -45,12 +44,6 @@ router.post('/login', async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
-  
-    // Check if user has password (local auth) or only google auth
-    if (!user.password && user.googleId) {
-        // This case shouldn't happen if we auto-gen passwords, but just in case
-       return res.status(400).json({ message: 'Please login with Google' });
-    }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
@@ -70,29 +63,54 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Combined Google Auth Route (Initiation and Callback)
-router.get('/google', (req, res, next) => {
-  if (req.query.code) {
-    // This is the callback from Google
-    passport.authenticate('google', { session: false }, (err, user, info) => {
-      if (err) {
-        console.error('Google Auth Error:', err);
-        return res.redirect('http://localhost:3000/login?error=server_error');
-      }
-      if (!user) {
-        console.error('Google Auth Failed: No user');
-        return res.redirect('http://localhost:3000/login?error=auth_failed');
-      }
-      
-      // Successful authentication
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secretString', { expiresIn: '1h' });
-      res.redirect(`http://localhost:3000/login-success?token=${token}`);
-    })(req, res, next);
-  } else {
-    // This is the login initiation
-    passport.authenticate('google', { scope: ['profile', 'email'], session: false })(req, res, next);
+
+// Google Login Route
+router.post('/google-login', async (req, res) => {
+  try {
+    const { email, username, uid, picture } = req.body;
+    
+    // Check if user exists by firebase UID
+    let user = await User.findOne({ firebaseUid: uid });
+    
+    if (!user) {
+        // Check if user exists by email (link accounts)
+        user = await User.findOne({ email });
+        
+        if (user) {
+            user.firebaseUid = uid;
+            if (!user.picture) user.picture = picture;
+            await user.save();
+        } else {
+            // Create new user
+            // Ensure username is unique if possible, or appending random string
+            // For now, standard creation
+            user = await User.create({
+                firebaseUid: uid,
+                email: email,
+                username: username || email.split('@')[0], // Fallback username
+                picture: picture
+            });
+        }
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secretString', { expiresIn: '1h' });
+
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: { id: user._id, username: user.username, email: user.email, picture: user.picture }
+    });
+
+  } catch (error) {
+    console.error('Google Login error:', error);
+    if (error.code === 11000) {
+       // Duplicate key error (likely username collision)
+       return res.status(400).json({ message: 'Username already taken, please sign up with a different username first.' });
+    }
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // Phone Login Route (Mock Verification for Protoype)
 router.post('/phone-login', async (req, res) => {
