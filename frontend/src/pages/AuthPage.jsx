@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { auth, setupRecaptcha, signInWithPhoneNumber } from '../firebase';
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(false);
+  const [isPhoneLogin, setIsPhoneLogin] = useState(false); // New State for Phone Mode
+  const [isForgotPassword, setIsForgotPassword] = useState(false); // New State for Forgot Password
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -10,6 +17,124 @@ const AuthPage = () => {
   });
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [timer, setTimer] = useState(0);
+
+  // Timer Countdown Effect
+  useEffect(() => {
+    let interval;
+    if (timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  // Cleanup Recaptcha when switching modes or unmounting
+  useEffect(() => {
+    return () => {
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+          // Ignore error if widget not rendered
+        }
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, [isPhoneLogin]);
+
+  const resetPhoneAuth = () => {
+      if (window.recaptchaVerifier) {
+          try {
+              window.recaptchaVerifier.clear();
+          } catch(e) { console.error(e); }
+          window.recaptchaVerifier = null;
+      }
+      setConfirmationResult(null);
+      setOtp('');
+      setTimer(0);
+      setErrors({});
+  };
+
+  // Handle Phone Auth
+  const handleSendOtp = async () => {
+    try {
+        if(!phoneNumber || phoneNumber.length < 10) {
+            setErrors({ phone: 'Please enter a valid phone number (e.g., +12223334444)'});
+            return;
+        }
+        
+        const verifier = setupRecaptcha('recaptcha-container');
+        const confirmation = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+        setConfirmationResult(confirmation);
+        setTimer(60); // Start 60s timer
+        setErrors({});
+        alert('OTP Sent!');
+    } catch (err) {
+        console.error(err);
+        let msg = err.message;
+        if (err.code === 'auth/billing-not-enabled') {
+            msg = 'Firebase requires the Blaze plan for real SMS. Please add a "Test Phone Number" in Firebase Console to test for free.';
+        }
+        setErrors({ phone: msg });
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+      try {
+          const result = await confirmationResult.confirm(otp);
+          const user = result.user;
+          console.log("Firebase User:", user);
+          
+          // Send to Backend to create/get MongoDB User
+          const response = await fetch('http://localhost:5000/api/auth/phone-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  phoneNumber: user.phoneNumber, 
+                  uid: user.uid 
+              })
+          });
+          
+          const data = await response.json();
+          if (response.ok) {
+              localStorage.setItem('token', data.token);
+              window.location.href = '/dashboard';
+          } else {
+              setErrors({ otp: data.message || 'Login failed' });
+          }
+
+      } catch (err) {
+          console.error(err);
+          setErrors({ otp: 'Invalid OTP' });
+      }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!formData.email) {
+      setErrors({ email: 'Please enter your email address' });
+      return;
+    }
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert('Password reset link sent to your email.');
+        setIsForgotPassword(false);
+        setIsLogin(true);
+      } else {
+        setErrors({ email: data.message });
+      }
+    } catch (error) {
+      console.error(error);
+      setErrors({ email: 'Failed to send request' });
+    }
+  };
 
   // Handle input changes
   const handleChange = (e) => {
@@ -81,6 +206,13 @@ const AuthPage = () => {
           body: JSON.stringify(body),
         });
 
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") === -1) {
+            const text = await response.text();
+            console.error("Non-JSON response:", text);
+            throw new Error("Server returned non-JSON response. Check console for details.");
+        }
+
         const data = await response.json();
 
         if (response.ok) {
@@ -151,7 +283,130 @@ const AuthPage = () => {
               </p>
             </div>
           
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            <form className="mt-6 space-y-4" onSubmit={isPhoneLogin ? (e)=>{e.preventDefault()} : handleSubmit}>
+              
+              {isForgotPassword ? (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-gray-900">Reset Password</h3>
+                    <p className="text-sm text-gray-600 mt-2">Enter your email address and we'll send you a link to reset your password.</p>
+                  </div>
+                  <div>
+                    <label htmlFor="fp-email" className="block text-xs font-medium text-gray-700">Email Address</label>
+                    <div className="mt-1">
+                      <input
+                        id="fp-email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                     {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+                  </div>
+                  <button
+                     type="button"
+                     onClick={handleForgotPassword}
+                     className="w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shadow-md"
+                  >
+                     Send Reset Link
+                  </button>
+                   <button
+                     type="button"
+                     onClick={() => { setIsForgotPassword(false); setErrors({}); }}
+                     className="w-full text-center text-xs text-sky-600 hover:underline mt-2"
+                  >
+                     Back to Login
+                  </button>
+                </div>
+              ) : isPhoneLogin ? (
+                  // PHONE LOGIN FORM
+                <div className="space-y-4">
+                  {!confirmationResult ? (
+                    <>
+                       <div>
+                        <label htmlFor="phoneNumber" className="block text-xs font-medium text-gray-700">
+                          Phone Number (with +CountryCode)
+                        </label>
+                        <div className="mt-1">
+                          <input
+                            id="phoneNumber"
+                            name="phoneNumber"
+                            type="tel"
+                            placeholder="+1 555 555 5555"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                          />
+                        </div>
+                        {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
+                      </div>
+                      <div id="recaptcha-container"></div>
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 shadow-md"
+                      >
+                        Send Verification Code
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                       <div>
+                        <label htmlFor="otp" className="block text-xs font-medium text-gray-700">
+                          Enter Verification Code
+                        </label>
+                        <div className="mt-1">
+                          <input
+                            id="otp"
+                            name="otp"
+                            type="text"
+                            placeholder="123456"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value)}
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                          />
+                        </div>
+                        {errors.otp && <p className="mt-1 text-xs text-red-600">{errors.otp}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleVerifyOtp}
+                        className="w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shadow-md"
+                      >
+                        Verify & Login
+                      </button>
+                      
+                      {timer > 0 ? (
+                        <p className="text-center text-xs text-gray-500 mt-2">
+                          Resend code in <span className="font-bold">{timer}s</span>
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                             // Go back to phone input screen to re-initialize recaptcha properly
+                             resetPhoneAuth();
+                          }}
+                          className="w-full text-center text-xs text-green-600 hover:text-green-700 hover:underline mt-2 font-medium"
+                        >
+                          Resend Verification Code
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={resetPhoneAuth}
+                        className="w-full text-center text-xs text-sky-600 hover:underline mt-1"
+                      >
+                         Change Phone Number
+                      </button>
+                    </>
+                  )}
+                 </div>
+              ) : (
               <div className="space-y-3">
                 
                 {/* Username Field - Signup Only */}
@@ -252,6 +507,14 @@ const AuthPage = () => {
                   )}
                 </div>
 
+                {isLogin && (
+                   <div className="flex justify-end -mt-2 mb-2">
+                      <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-sky-600 hover:text-sky-500 hover:underline">
+                        Forgot Password?
+                      </button>
+                   </div>
+                )}
+
                 {/* Confirm Password - Signup Only */}
                 {!isLogin && (
                   <div>
@@ -279,7 +542,9 @@ const AuthPage = () => {
                   </div>
                 )}
               </div>
-
+            )}
+              
+             {!isPhoneLogin && (
               <div>
                 <button
                   type="submit"
@@ -288,6 +553,7 @@ const AuthPage = () => {
                   {isLogin ? 'Sign In' : 'Begin your Journey'}
                 </button>
               </div>
+             )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -323,6 +589,28 @@ const AuthPage = () => {
                       />
                   </svg>
                   Continue with Google
+                </button>
+              </div>
+
+              {/* Phone Login Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsPhoneLogin(!isPhoneLogin)}
+                  className="w-full flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
+                >
+                  {isPhoneLogin ? (
+                    // Email Icon
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2 text-gray-700">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                    </svg>
+                  ) : (
+                    // Phone Icon
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2 text-gray-700">
+                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                    </svg>
+                  )}
+                  {isPhoneLogin ? "Use Email instead" : "Continue with Phone Number"}
                 </button>
               </div>
             </form>

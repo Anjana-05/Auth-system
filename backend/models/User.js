@@ -10,19 +10,24 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: true,
+    // required: true, // REMOVED to allow Phone Auth users
     unique: true,
+    sparse: true, // Allows multiple null values
     trim: true,
     lowercase: true,
     match: [/\S+@\S+\.\S+/, 'Please use a valid email address']
   },
+  phoneNumber: { type: String, unique: true, sparse: true },
+  firebaseUid: { type: String, unique: true, sparse: true },
   password: {
     type: String,
     minlength: 6
   },
   googleId: { type: String, unique: true, sparse: true },
   name: String,
-  picture: String
+  picture: String,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date
 }, { timestamps: true });
 
 // Hash password before saving

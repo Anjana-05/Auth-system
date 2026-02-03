@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import AuthPage from './components/AuthPage'
-import LoginSuccess from './components/LoginSuccess';
+import AuthPage from './pages/AuthPage'
+import LoginSuccess from './pages/LoginSuccess';
+import Dashboard from './pages/Dashboard';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import './App.css'
 
 function App() {
@@ -9,7 +11,8 @@ function App() {
       <Routes>
         <Route path="/" element={<AuthPage />} />
         <Route path="/login-success" element={<LoginSuccess />} />
-        <Route path="/dashboard" element={<div className="p-8 text-2xl font-bold text-center">Welcome to Dashboard!</div>} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       </Routes>
     </Router>
   )
