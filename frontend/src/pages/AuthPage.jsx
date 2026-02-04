@@ -280,8 +280,9 @@ const AuthPage = () => {
           setErrors(prev => ({ ...prev, apiError: msg }));
         }
       } catch (error) {
-        console.error('API Error');
-        toast.error('Something went wrong. Please try again later.');
+        console.error('API Error Full:', error);
+        toast.error(error.message || 'Something went wrong. Please try again later.');
+        setErrors(prev => ({ ...prev, apiError: error.message }));
       }
     }
   };
