@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import multer from 'multer';
-import transporter from '../config/mailer.js';
+import sgMail from '@sendgrid/mail';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import User from '../models/User.js';
@@ -282,13 +282,15 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Send email
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        throw new Error("Email credentials are not set on the server.");
+    if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_FROM) {
+        throw new Error("Email credentials (SENDGRID_API_KEY, EMAIL_FROM) are not set on the server.");
     }
 
-    const mailOptions = {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    const msg = {
         to: user.email,
-        from: process.env.EMAIL_USER,
+        from: process.env.EMAIL_FROM,
         subject: 'Password Reset',
         text: `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
           `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
@@ -296,7 +298,7 @@ router.post('/forgot-password', async (req, res) => {
           `If you did not request this, please ignore this email and your password will remain unchanged.\n`
     };
 
-    await transporter.sendMail(mailOptions);
+    await sgMail.send(msg);
     res.status(200).json({ message: 'Password reset email sent' });
 
   } catch (error) {
