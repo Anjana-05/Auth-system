@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { auth, setupRecaptcha, signInWithPhoneNumber } from '../firebase';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { auth, setupRecaptcha, signInWithPhoneNumber, signInWithPopup, googleProvider } from '../firebase';
+import API_URL from '../config/api';
 
 const AuthPage = () => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
   const [isPhoneLogin, setIsPhoneLogin] = useState(false); // New State for Phone Mode
   const [isForgotPassword, setIsForgotPassword] = useState(false); // New State for Forgot Password
@@ -70,14 +74,10 @@ const AuthPage = () => {
         setConfirmationResult(confirmation);
         setTimer(60); // Start 60s timer
         setErrors({});
-        alert('OTP Sent!');
+        toast.success('OTP Sent!');
     } catch (err) {
-        console.error(err);
-        let msg = err.message;
-        if (err.code === 'auth/billing-not-enabled') {
-            msg = 'Firebase requires the Blaze plan for real SMS. Please add a "Test Phone Number" in Firebase Console to test for free.';
-        }
-        setErrors({ phone: msg });
+        console.error("Phone Auth Error");
+        setErrors({ phone: 'Something went wrong. Please try again later.' });
     }
   };
 
@@ -88,7 +88,7 @@ const AuthPage = () => {
           console.log("Firebase User:", user);
           
           // Send to Backend to create/get MongoDB User
-          const response = await fetch('http://localhost:5000/api/auth/phone-login', {
+          const response = await fetch(`${API_URL}/api/auth/phone-login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -100,14 +100,16 @@ const AuthPage = () => {
           const data = await response.json();
           if (response.ok) {
               localStorage.setItem('token', data.token);
-              window.location.href = '/dashboard';
+              toast.success('Login successful!');
+              navigate('/dashboard');
           } else {
-              setErrors({ otp: data.message || 'Login failed' });
+              toast.error('Login failed. Please try again later.');
+              setErrors({ otp: 'Login failed. Please try again later.' });
           }
 
       } catch (err) {
-          console.error(err);
-          setErrors({ otp: 'Invalid OTP' });
+          console.error('OTP Verification Error');
+          setErrors({ otp: 'Invalid OTP or network error. Please try again.' });
       }
   };
 
@@ -117,22 +119,56 @@ const AuthPage = () => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+      const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email })
       });
       const data = await response.json();
       if (response.ok) {
-        alert('Password reset link sent to your email.');
+        toast.success('Password reset link sent to your email.');
         setIsForgotPassword(false);
         setIsLogin(true);
       } else {
-        setErrors({ email: data.message });
+        toast.error('Something went wrong. Please try again.');
+        setErrors({ email: 'Something went wrong. Please try again. ' });
       }
     } catch (error) {
-      console.error(error);
-      setErrors({ email: 'Failed to send request' });
+      console.error('Forgot Password Error');
+      setErrors({ email: 'Failed to send request. Please try again later.' });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      const response = await fetch(`${API_URL}/api/auth/google-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: user.email, 
+          username: user.displayName, 
+          uid: user.uid,
+          picture: user.photoURL
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        toast.success('Login successful!');
+        navigate('/dashboard');
+      } else {
+        const msg = data.message || 'Something went wrong. Please try again later.';
+        toast.error(msg);
+        setErrors({ apiError: msg });
+      }
+    } catch (error) {
+      console.error("Google Login Error");
+      setErrors({ apiError: 'Something went wrong. Please try again later.' });
     }
   };
 
@@ -193,7 +229,7 @@ const AuthPage = () => {
     e.preventDefault();
     if (validate()) {
       try {
-        const endpoint = isLogin ? 'http://localhost:5000/api/auth/login' : 'http://localhost:5000/api/auth/signup';
+        const endpoint = isLogin ? `${API_URL}/api/auth/login` : `${API_URL}/api/auth/signup`;
         const body = isLogin 
           ? { email: formData.email, password: formData.password }
           : { username: formData.username, email: formData.email, password: formData.password };
@@ -217,16 +253,18 @@ const AuthPage = () => {
 
         if (response.ok) {
           localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          alert(`${isLogin ? 'Login' : 'Signup'} successful! Welcome ${data.user.username}`);
-          // Redirect or update app state here
+          toast.success(`${isLogin ? 'Login' : 'Signup'} successful! Welcome ${data.user.username}`);
+          setTimeout(() => {
+             navigate('/dashboard');
+          }, 100);
         } else {
-          setErrors(prev => ({ ...prev, apiError: data.message || 'Something went wrong' }));
-          alert(data.message || 'Error occurred');
+          const msg = data.message || 'Something went wrong. Please try again later.';
+          toast.error(msg);
+          setErrors(prev => ({ ...prev, apiError: msg }));
         }
       } catch (error) {
-        console.error('API Error:', error);
-        alert('Failed to connect to the server');
+        console.error('API Error');
+        toast.error('Something went wrong. Please try again later.');
       }
     }
   };
@@ -544,6 +582,18 @@ const AuthPage = () => {
               </div>
             )}
               
+             {errors.apiError && (
+               <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                 <div className="flex">
+                   <div className="ml-3">
+                     <p className="text-sm text-red-700">
+                       {errors.apiError}
+                     </p>
+                   </div>
+                 </div>
+               </div>
+             )}
+
              {!isPhoneLogin && (
               <div>
                 <button
@@ -567,7 +617,7 @@ const AuthPage = () => {
               <div>
                 <button
                   type="button"
-                  onClick={() => window.location.href = "http://localhost:5000/auth/google"}
+                  onClick={handleGoogleLogin}
                   className="w-full flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
                 >
                   <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">

@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,6 +14,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 // Setup Recaptcha
 export const setupRecaptcha = (elementId) => {
@@ -29,4 +30,4 @@ export const setupRecaptcha = (elementId) => {
   return window.recaptchaVerifier;
 };
 
-export { auth, signInWithPhoneNumber };
+export { auth, signInWithPhoneNumber, signInWithPopup, googleProvider };

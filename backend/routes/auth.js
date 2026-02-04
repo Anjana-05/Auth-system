@@ -2,9 +2,31 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import path from 'path';
 import User from '../models/User.js';
 
 const router = express.Router();
+
+// Cloudinary Config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Multer Storage Configuration (Cloudinary)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'travel_app_users',
+    allowed_formats: ['jpg', 'png', 'jpeg'],
+  },
+});
+
+const upload = multer({ storage: storage });
 
 // Signup Route
 router.post('/signup', async (req, res) => {
@@ -172,6 +194,53 @@ router.get('/me', async (req, res) => {
   } catch (error) {
     console.error('Auth check error:', error);
     res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
+// Update Profile Route
+router.put('/update', upload.single('picture'), async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretString');
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { username, email, phoneNumber, name } = req.body;
+
+    // Check availability if changing unique fields
+    if (username && username !== user.username) {
+      const exists = await User.findOne({ username });
+      if (exists) return res.status(400).json({ message: 'Username already taken' });
+      user.username = username;
+    }
+    if (email && email !== user.email) {
+      const exists = await User.findOne({ email });
+      if (exists) return res.status(400).json({ message: 'Email already taken' });
+      user.email = email;
+    }
+
+    if (phoneNumber) user.phoneNumber = phoneNumber;
+    if (name) user.name = name;
+    
+    // Handle File Upload
+    if (req.file) {
+        // Cloudinary returns the absolute URL in path
+        user.picture = req.file.path;
+    }
+
+    await user.save();
+
+    res.json({ message: 'Profile updated successfully', user });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error during update' });
   }
 });
 
