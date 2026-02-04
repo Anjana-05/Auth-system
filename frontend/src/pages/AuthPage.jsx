@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { auth, setupRecaptcha, signInWithPhoneNumber, signInWithPopup, googleProvider } from '../firebase';
 import API_URL from '../config/api';
 
+console.log("Current API_URL:", API_URL); // DEBUG: Check where requests are going
+
 const AuthPage = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
