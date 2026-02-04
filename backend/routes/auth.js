@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import multer from 'multer';
-import sgMail from '@sendgrid/mail';
+import sgMail from '../config/sendgrid.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import User from '../models/User.js';
@@ -267,43 +267,38 @@ router.put('/update', upload.single('picture'), async (req, res) => {
 });
 
 // Forgot Password Route
-router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
+router.post("/forgot-password", async (req, res) => {
   try {
+    const { email } = req.body;
+
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    // Generate token
-    const token = crypto.randomBytes(20).toString('hex');
+    const token = crypto.randomBytes(20).toString("hex");
     user.resetPasswordToken = token;
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Send email
-    if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_FROM) {
-        throw new Error("Email credentials (SENDGRID_API_KEY, EMAIL_FROM) are not set on the server.");
-    }
+    const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password/${token}`;
 
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    await sgMail.send({
+      to: email,
+      from: process.env.EMAIL_FROM,
+      subject: "Password Reset",
+      text: `Reset your password: ${resetLink}`,
+      html: `
+        <p>You requested a password reset.</p>
+        <p><a href="${resetLink}">Click here to reset your password</a></p>
+        <p>This link expires in 1 hour.</p>
+      `,
+    });
 
-    const msg = {
-        to: user.email,
-        from: process.env.EMAIL_FROM,
-        subject: 'Password Reset',
-        text: `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
-          `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
-          `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password/${token}\n\n` +
-          `If you did not request this, please ignore this email and your password will remain unchanged.\n`
-    };
-
-    await sgMail.send(msg);
-    res.status(200).json({ message: 'Password reset email sent' });
-
-  } catch (error) {
-    console.error('Forgot Password Error Full:', error);
-    res.status(500).json({ message: 'Error sending email: ' + error.message });
+    res.json({ message: "Password reset email sent" });
+  } catch (err) {
+    console.error("SendGrid Error:", err);
+    res.status(500).json({ message: "Email sending failed" });
   }
 });
 
