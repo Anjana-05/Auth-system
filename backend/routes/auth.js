@@ -84,6 +84,11 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Check if user has a password (if they signed up via Google, they might not)
+    if (!user.password) {
+        return res.status(400).json({ message: 'Account uses Google Sign-in. Please login with Google.' });
+    }
+
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
