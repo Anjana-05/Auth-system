@@ -289,6 +289,19 @@ router.post('/forgot-password', async (req, res) => {
       }
     });
 
+    // Verify connection configuration
+    await new Promise((resolve, reject) => {
+      transporter.verify(function (error, success) {
+        if (error) {
+          console.error("Transporter verification failed:", error);
+          reject(error);
+        } else {
+          console.log("Server is ready to take our messages");
+          resolve(success);
+        }
+      });
+    });
+
     const mailOptions = {
         to: user.email,
         from: process.env.EMAIL_USER,
