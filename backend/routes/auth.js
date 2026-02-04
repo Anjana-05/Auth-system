@@ -10,15 +10,8 @@ import User from '../models/User.js';
 const router = express.Router();
 
 // Cloudinary Config
-// If CLOUDINARY_URL is provided in env, the SDK auto-detects it. 
-// Otherwise, we fall back to individual keys.
-if (!process.env.CLOUDINARY_URL) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-  });
-}
+// The SDK automatically configures itself if CLOUDINARY_URL is present in process.env
+// Format: cloudinary://<api_key>:<api_secret>@<cloud_name>
 
 // Multer Storage Configuration (Cloudinary)
 const storage = new CloudinaryStorage({
