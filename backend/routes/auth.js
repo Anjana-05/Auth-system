@@ -1,8 +1,8 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 import multer from 'multer';
+import transporter from '../config/mailer.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import User from '../models/User.js';
@@ -285,27 +285,6 @@ router.post('/forgot-password', async (req, res) => {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
         throw new Error("Email credentials are not set on the server.");
     }
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-
-    // Verify connection configuration
-    await new Promise((resolve, reject) => {
-      transporter.verify(function (error, success) {
-        if (error) {
-          console.error("Transporter verification failed:", error);
-          reject(error);
-        } else {
-          console.log("Server is ready to take our messages");
-          resolve(success);
-        }
-      });
-    });
 
     const mailOptions = {
         to: user.email,
