@@ -141,8 +141,9 @@ const AuthPage = () => {
         setIsForgotPassword(false);
         setIsLogin(true);
       } else {
-        toast.error('Something went wrong. Please try again.');
-        setErrors({ email: 'Something went wrong. Please try again. ' });
+        const msg = data.message || 'Something went wrong. Please try again.';
+        toast.error(msg);
+        setErrors({ email: msg });
       }
     } catch (error) {
       console.error('Forgot Password Error', error);
