@@ -10,8 +10,29 @@ import User from '../models/User.js';
 const router = express.Router();
 
 // Cloudinary Config
-// The SDK automatically configures itself if CLOUDINARY_URL is present in process.env
-// Format: cloudinary://<api_key>:<api_secret>@<cloud_name>
+if (process.env.CLOUDINARY_URL) {
+  // Manually parse the URL to avoid protocol errors (fix for Render/older SDKs)
+  // URL Format: cloudinary://<api_key>:<api_secret>@<cloud_name>
+  try {
+    const [creds, cloudName] = process.env.CLOUDINARY_URL.replace('cloudinary://', '').split('@');
+    const [apiKey, apiSecret] = creds.split(':');
+    
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret
+    });
+  } catch (err) {
+    console.error('Failed to parse CLOUDINARY_URL manually:', err);
+  }
+} else {
+    // Fallback if individual keys are used
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+}
 
 // Multer Storage Configuration (Cloudinary)
 const storage = new CloudinaryStorage({
@@ -256,6 +277,10 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Send email
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        throw new Error("Email credentials are not set on the server.");
+    }
+
     const transporter = nodemailer.createTransport({
       service: 'gmail', // or your preferred service
       auth: {
@@ -278,8 +303,8 @@ router.post('/forgot-password', async (req, res) => {
     res.status(200).json({ message: 'Password reset email sent' });
 
   } catch (error) {
-    console.error('Forgot Password Error:', error);
-    res.status(500).json({ message: 'Error sending email' });
+    console.error('Forgot Password Error Full:', error);
+    res.status(500).json({ message: 'Error sending email: ' + error.message });
   }
 });
 

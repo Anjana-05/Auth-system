@@ -22,6 +22,7 @@ const AuthPage = () => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Timer Countdown Effect
   useEffect(() => {
@@ -65,8 +66,14 @@ const AuthPage = () => {
   const handleSendOtp = async () => {
     try {
         if(!phoneNumber || phoneNumber.length < 10) {
-            setErrors({ phone: 'Please enter a valid phone number (e.g., +12223334444)'});
+            setErrors({ phone: 'Please enter a valid phone number with country code (e.g., +12223334444)'});
             return;
+        }
+
+        // Basic E.164 check (must include +)
+        if (!phoneNumber.startsWith('+')) {
+           setErrors({ phone: 'Phone number must start with + and country code (e.g., +1...)'});
+           return;
         }
         
         const verifier = setupRecaptcha('recaptcha-container');
@@ -76,8 +83,12 @@ const AuthPage = () => {
         setErrors({});
         toast.success('OTP Sent!');
     } catch (err) {
-        console.error("Phone Auth Error");
-        setErrors({ phone: 'Something went wrong. Please try again later.' });
+        console.error("Phone Auth Error", err);
+        setErrors({ phone: err.message || 'Something went wrong. Please try again later.' });
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = null;
+        }
     }
   };
 
@@ -118,6 +129,7 @@ const AuthPage = () => {
       return;
     }
     try {
+      setIsLoading(true);
       const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,13 +145,16 @@ const AuthPage = () => {
         setErrors({ email: 'Something went wrong. Please try again. ' });
       }
     } catch (error) {
-      console.error('Forgot Password Error');
-      setErrors({ email: 'Failed to send request. Please try again later.' });
+      console.error('Forgot Password Error', error);
+      setErrors({ email: 'Failed to send request. Please check your network or try again later.' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
+      setIsLoading(true);
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
@@ -346,9 +361,10 @@ const AuthPage = () => {
                   <button
                      type="button"
                      onClick={handleForgotPassword}
-                     className="w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shadow-md"
+                     disabled={isLoading}
+                     className={`w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-bold rounded-lg text-white shadow-md ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500'}`}
                   >
-                     Send Reset Link
+                     {isLoading ? 'Sending...' : 'Send Reset Link'}
                   </button>
                    <button
                      type="button"
