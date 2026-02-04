@@ -12,12 +12,16 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://user-auth-8f3d8.firebaseapp.com",
-      "https://user-auth-8f3d8.web.app",
+      "https://user-auth-8f3d8.web.app"
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
+
+// Explicit OPTION handling for preflight requests
+app.options('*', cors());
 
 app.use(express.json());
 
