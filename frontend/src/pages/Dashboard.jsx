@@ -18,7 +18,6 @@ const Dashboard = () => {
   const fetchUser = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      console.log('No token found, redirecting to login');
       navigate('/');
       return;
     }

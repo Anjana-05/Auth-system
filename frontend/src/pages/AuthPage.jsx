@@ -85,7 +85,6 @@ const AuthPage = () => {
       try {
           const result = await confirmationResult.confirm(otp);
           const user = result.user;
-          console.log("Firebase User:", user);
           
           // Send to Backend to create/get MongoDB User
           const response = await fetch(`${API_URL}/api/auth/phone-login`, {

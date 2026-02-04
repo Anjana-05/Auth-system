@@ -5,17 +5,20 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import path from 'path';
 import User from '../models/User.js';
 
 const router = express.Router();
 
 // Cloudinary Config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// If CLOUDINARY_URL is provided in env, the SDK auto-detects it. 
+// Otherwise, we fall back to individual keys.
+if (!process.env.CLOUDINARY_URL) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+}
 
 // Multer Storage Configuration (Cloudinary)
 const storage = new CloudinaryStorage({
