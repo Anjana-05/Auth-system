@@ -41,14 +41,14 @@ const Dashboard = () => {
         });
         setSelectedFile(null);
       } else {
-        console.error('Failed to fetch user:', response.status);
         if (response.status === 401 || response.status === 403) {
+           toast.error('Session expired');
            localStorage.removeItem('token');
            navigate('/');
         }
       }
     } catch (error) {
-      console.error('Error fetching user:', error);
+       toast.error('Failed to load user data');
       // Do not redirect on network error, just stop loading
     } finally {
       setLoading(false);
@@ -106,7 +106,6 @@ const Dashboard = () => {
               toast.error(data.message || 'Failed to update profile');
           }
       } catch (error) {
-          console.error(error);
           toast.error('An error occurred. Please try again.');
       }
   };
@@ -158,8 +157,7 @@ const Dashboard = () => {
                                     alt="Profile" 
                                     className="h-full w-full rounded-full object-cover" 
                                     onError={(e) => {
-                                        console.error('Error loading image:', user.picture);
-                                        // e.target.style.display = 'none'; // Option to hide
+                                        // Ignore image load error
                                     }}
                                  />
                              ) : (

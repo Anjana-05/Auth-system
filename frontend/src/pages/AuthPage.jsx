@@ -4,8 +4,6 @@ import toast from 'react-hot-toast';
 import { auth, setupRecaptcha, signInWithPhoneNumber, signInWithPopup, googleProvider } from '../firebase';
 import API_URL from '../config/api';
 
-console.log("Current API_URL:", API_URL); // DEBUG: Check where requests are going
-
 const AuthPage = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
@@ -262,8 +260,7 @@ const AuthPage = () => {
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") === -1) {
             const text = await response.text();
-            console.error("Non-JSON response:", text);
-            throw new Error("Server returned non-JSON response. Check console for details.");
+            throw new Error("Server communication error. Please try again.");
         }
 
         const data = await response.json();
@@ -281,7 +278,6 @@ const AuthPage = () => {
         }
       } catch (error) {
         console.error('API Error Full:', error);
-        toast.error(error.message || 'Something went wrong. Please try again later.');
         setErrors(prev => ({ ...prev, apiError: error.message }));
       }
     }
